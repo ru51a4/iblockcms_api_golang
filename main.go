@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/driver/mysql"
@@ -9,14 +10,13 @@ import (
 )
 
 type iblock struct {
-	Id        int      `json:"id" gorm:"primaryKey"`
-	Name      string   `json:"name"`
-	Slug      string   `json:"slug"`
-	Parent_id int      `json:"parent_id"`
-	Left      int      `json:"left"`
-	Right     int      `json:"right"`
-	Depth     int      `json:"depth"`
-	Iblock    []iblock `gorm:"foreignkey:Iblock_propertyID"`
+	Id        int    `json:"id" gorm:"primaryKey"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	Parent_id int    `json:"parent_id"`
+	Left      int    `json:"left"`
+	Right     int    `json:"right"`
+	Depth     int    `json:"depth"`
 }
 
 func (iblock) TableName() string {
@@ -60,17 +60,73 @@ func (iblock_prop_value) TableName() string {
 	return "iblock_prop_values"
 }
 
-func main() {
+// service layer
+type _db struct{}
+
+func (_db _db) init() *gorm.DB {
 	dsn := "root:root@tcp(127.0.0.1:3306)/iblockcms?charset=utf8mb4&parseTime=True&loc=Local"
 	db, _ := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	return db
+}
 
+type catalog_node struct {
+	Childrens []*catalog_node `json:"childrens"`
+	Value     iblock          `json:"item"`
+}
+
+type createTreeRes struct {
+	catalog catalog_node
+	ids     []int
+}
+
+func createTree(id int) createTreeRes {
+	_db := _db{}
+	db := _db.init()
+	var ids []int
+	var deep func(node *catalog_node)
+	deep = func(node *catalog_node) {
+		ids = append(ids, node.Value.Id)
+		var _iblock []iblock
+		db.Where("parent_id = ?", node.Value.Id).Find(&_iblock)
+		for _, item := range _iblock {
+			c := catalog_node{Value: item, Childrens: nil}
+			node.Childrens = append(node.Childrens, &c)
+			deep(&c)
+		}
+
+	}
+	var _iblock []iblock
+	db.Where("id = ?", id).Find(&_iblock)
+	c := catalog_node{Childrens: nil, Value: _iblock[0]}
+	ids = append(ids, c.Value.Id)
+	deep(&c)
+	return createTreeRes{
+		catalog: c,
+		ids:     ids,
+	}
+}
+func getElements(ids []int, page int) []iblock_elements {
+	_db := _db{}
+	db := _db.init()
+	var elements []iblock_elements
+	db.Offset(page*5).Limit(5).Preload("Iblock_prop_value").Where("iblock_id", ids).Find(&elements)
+	return elements
+}
+
+//
+
+func main() {
 	app := fiber.New()
+	app.Get("/catalog/:page?", func(c *fiber.Ctx) error {
+		page := c.Params("page")
+		q := createTree(1)
+		catalog := q.catalog
+		i, _ := strconv.Atoi(page)
+		els := getElements(q.ids, i)
 
-	app.Get("/catalog", func(c *fiber.Ctx) error {
-		var els []iblock_elements
-		db.Limit(5).Preload("Iblock_prop_value").Find(&els)
 		return c.JSON(&fiber.Map{
 			"success": true,
+			"catalog": catalog,
 			"els":     els,
 		})
 	})
