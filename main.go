@@ -61,12 +61,19 @@ func (iblock_prop_value) TableName() string {
 }
 
 // service layer
-type _db struct{}
+type _db struct {
+	_instance *gorm.DB
+}
 
-func (_db _db) init() *gorm.DB {
+var __db = _db{}
+
+func (_db *_db) init() *gorm.DB {
+	if _db._instance != nil {
+		return _db._instance
+	}
 	dsn := "root:root@tcp(127.0.0.1:3306)/iblockcms?charset=utf8mb4&parseTime=True&loc=Local"
-	db, _ := gorm.Open(mysql.Open(dsn), &gorm.Config{})
-	return db
+	_db._instance, _ = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	return _db._instance
 }
 
 type catalog_node struct {
@@ -80,8 +87,7 @@ type createTreeRes struct {
 }
 
 func createTree(id int) createTreeRes {
-	_db := _db{}
-	db := _db.init()
+	db := __db.init()
 	var ids []int
 	var deep func(node *catalog_node)
 	deep = func(node *catalog_node) {
@@ -106,8 +112,7 @@ func createTree(id int) createTreeRes {
 	}
 }
 func getElements(ids []int, page int) []iblock_elements {
-	_db := _db{}
-	db := _db.init()
+	db := __db.init()
 	var elements []iblock_elements
 	db.Offset(page*5).Limit(5).Preload("Iblock_prop_value").Where("iblock_id", ids).Find(&elements)
 	return elements
