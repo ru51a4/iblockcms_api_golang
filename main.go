@@ -10,13 +10,14 @@ import (
 )
 
 type iblock struct {
-	Id        int    `json:"id" gorm:"primaryKey"`
-	Name      string `json:"name"`
-	Slug      string `json:"slug"`
-	Parent_id int    `json:"parent_id"`
-	Left      int    `json:"left"`
-	Right     int    `json:"right"`
-	Depth     int    `json:"depth"`
+	Id              int               `json:"id" gorm:"primaryKey"`
+	Name            string            `json:"name"`
+	Slug            string            `json:"slug"`
+	Parent_id       int               `json:"parent_id"`
+	Left            int               `json:"left"`
+	Right           int               `json:"right"`
+	Depth           int               `json:"depth"`
+	Iblock_property []iblock_property `json:"properties" gorm:"foreignkey:IblockId"`
 }
 
 func (iblock) TableName() string {
@@ -118,6 +119,41 @@ func getElements(ids []int, page int) []iblock_elements {
 	return elements
 }
 
+func getProperties(id int) map[int][]iblock_prop_value {
+	db := __db.init()
+	res := make(map[int][]iblock_prop_value)
+	var props []iblock_property
+	var deep func(id int)
+	deep = func(id int) {
+		var _iblock []iblock
+		db.Preload("Iblock_property").Where("id = ?", id).Find(&_iblock)
+		for _, item := range _iblock {
+			for _, p := range item.Iblock_property {
+				props = append(props, p)
+			}
+		}
+		for _, item := range _iblock {
+			deep(item.Parent_id)
+		}
+	}
+	deep(id)
+
+	for _, item := range props {
+
+		_p := make(map[string]iblock_prop_value)
+		var _props []iblock_prop_value
+		//fuck mysql db.Where("prop_id = ?", item.Id).Group("value").Find(&_props)
+		db.Where("prop_id = ?", item.Id).Find(&_props)
+		for _, p := range _props {
+			_p[p.Value] = p
+		}
+		for _, p := range _p {
+			res[item.Id] = append(res[item.Id], p)
+		}
+	}
+	return res
+}
+
 //
 
 func main() {
@@ -128,11 +164,12 @@ func main() {
 		catalog := q.catalog
 		i, _ := strconv.Atoi(page)
 		els := getElements(q.ids, i)
-
+		props := getProperties(6)
 		return c.JSON(&fiber.Map{
 			"success": true,
 			"catalog": catalog,
 			"els":     els,
+			"props":   props,
 		})
 	})
 
