@@ -144,13 +144,9 @@ func getProperties(id int) map[int][]iblock_prop_value {
 
 	var thread func(item iblock_property)
 	thread = func(item iblock_property) {
-		_p := make(map[string]iblock_prop_value)
 		var _props []iblock_prop_value
 		db.Where("prop_id = ?", item.Id).Group("value").Find(&_props)
 		for _, p := range _props {
-			_p[p.Value] = p
-		}
-		for _, p := range _p {
 			res[item.Id] = append(res[item.Id], p)
 		}
 		defer wg.Done()
