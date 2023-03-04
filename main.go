@@ -146,8 +146,7 @@ func getProperties(id int) map[int][]iblock_prop_value {
 	thread = func(item iblock_property) {
 		_p := make(map[string]iblock_prop_value)
 		var _props []iblock_prop_value
-		//fuck mysql db.Where("prop_id = ?", item.Id).Group("value").Find(&_props)
-		db.Where("prop_id = ?", item.Id).Find(&_props)
+		db.Where("prop_id = ?", item.Id).Group("value").Find(&_props)
 		for _, p := range _props {
 			_p[p.Value] = p
 		}
