@@ -163,15 +163,14 @@ func getProperties(id int) map[int][]iblock_prop_value {
 
 func main() {
 	app := fiber.New()
-	app.Get("/catalog/:page?", func(c *fiber.Ctx) error {
-		page := c.Params("page")
-		q := createTree(1)
+	app.Get("/catalog/:id/:page/", func(c *fiber.Ctx) error {
+		id, _ := strconv.Atoi(c.Params("id"))
+		page, _ := strconv.Atoi(c.Params("page"))
+		q := createTree(id)
 		catalog := q.catalog
-		i, _ := strconv.Atoi(page)
-		els := getElements(q.ids, i)
-		props := getProperties(6)
+		els := getElements(q.ids, page)
+		props := getProperties(id)
 		return c.JSON(&fiber.Map{
-			"success": true,
 			"catalog": catalog,
 			"els":     els,
 			"props":   props,
