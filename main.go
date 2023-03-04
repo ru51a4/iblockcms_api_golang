@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"strconv"
+	"sync"
 
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/driver/mysql"
@@ -138,8 +139,11 @@ func getProperties(id int) map[int][]iblock_prop_value {
 	}
 	deep(id)
 
-	for _, item := range props {
+	var wg sync.WaitGroup
+	wg.Add(len(props))
 
+	var thread func(item iblock_property)
+	thread = func(item iblock_property) {
 		_p := make(map[string]iblock_prop_value)
 		var _props []iblock_prop_value
 		//fuck mysql db.Where("prop_id = ?", item.Id).Group("value").Find(&_props)
@@ -150,7 +154,13 @@ func getProperties(id int) map[int][]iblock_prop_value {
 		for _, p := range _p {
 			res[item.Id] = append(res[item.Id], p)
 		}
+		defer wg.Done()
 	}
+
+	for _, item := range props {
+		go thread(item)
+	}
+	wg.Wait()
 	return res
 }
 
