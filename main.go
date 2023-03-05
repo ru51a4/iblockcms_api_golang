@@ -29,6 +29,7 @@ type iblock_elements struct {
 	Id                int                 `json:"id" gorm:"primaryKey"`
 	Slug              string              `json:"slug"`
 	Name              string              `json:"name"`
+	Iblock_id         int                 `json:"iblock_id" gorm:"column:iblock_id;"`
 	Iblock_prop_value []iblock_prop_value `gorm:"foreignkey:Iblock_elementsID"`
 }
 
@@ -50,12 +51,13 @@ func (iblock_property) TableName() string {
 }
 
 type iblock_prop_value struct {
-	Id                int    `gorm:"primaryKey"`
-	Value             string `json:"value"`
-	Slug              string `json:"slug"`
-	Value_number      int    `json:"value_number"`
-	Iblock_propertyID int    `gorm:"column:prop_id;"`
-	Iblock_elementsID int    `gorm:"column:el_id;"`
+	Id                int             `gorm:"primaryKey"`
+	Value             string          `json:"value"`
+	Slug              string          `json:"slug"`
+	Value_number      int             `json:"value_number"`
+	Iblock_propertyID int             `gorm:"column:prop_id;"`
+	Iblock_elementsID int             `gorm:"column:el_id;"`
+	Iblock_property   iblock_property `json:"prop"`
 }
 
 func (iblock_prop_value) TableName() string {
@@ -187,12 +189,17 @@ func getElements(range_arr []range_arr, or []or_arr, ids []int, page int) []iblo
 	for _, item := range elements {
 		hack = append(hack, item.Id)
 	}
-	db.Preload("Iblock_prop_value").Where("id", hack).Find(&res)
+	db.Preload("Iblock_prop_value.Iblock_property").Where("id", hack).Find(&res)
 	return res
 }
 
+var properties_cache = make(map[int]map[int][]iblock_prop_value)
+
 func getProperties(id int) map[int][]iblock_prop_value {
 	db := __db.init()
+	if properties_cache[id] != nil {
+		return properties_cache[id]
+	}
 	res := make(map[int][]iblock_prop_value)
 	var props []iblock_property
 	var deep func(id int)
@@ -227,6 +234,7 @@ func getProperties(id int) map[int][]iblock_prop_value {
 		go thread(item)
 	}
 	wg.Wait()
+	properties_cache[id] = res
 	return res
 }
 
@@ -239,8 +247,10 @@ func main() {
 		page, _ := strconv.Atoi(c.Params("page"))
 		q := createTree(id)
 		catalog := q.catalog
-		var or = []or_arr{{value: []string{"геймерская", "обычная"}, prop_id: 2}, {value: []string{"внутренняя"}, prop_id: 3}}
-		var range_arr = []range_arr{{value_to: 900, value_from: 0, prop_id: 15}}
+		//var or = []or_arr{{value: []string{"геймерская", "обычная"}, prop_id: 2}, {value: []string{"внутренняя"}, prop_id: 3}}
+		//var range_arr = []range_arr{{value_to: 900, value_from: 0, prop_id: 15}}
+		var or = []or_arr{}
+		var range_arr = []range_arr{}
 		els := getElements(range_arr, or, q.ids, page)
 		props := getProperties(id)
 		return c.JSON(&fiber.Map{
