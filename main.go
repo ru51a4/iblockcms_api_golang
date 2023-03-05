@@ -118,9 +118,16 @@ type or_arr struct {
 	value   []string
 	prop_id int
 }
+type range_arr struct {
+	value_to   int
+	value_from int
+	prop_id    int
+}
 
-func getElements(or []or_arr, ids []int, page int) []iblock_elements {
+func getElements(range_arr []range_arr, or []or_arr, ids []int, page int) []iblock_elements {
 	db := __db.init()
+
+	//gorm not support WhereHas(laravel) https://github.com/go-gorm/gorm/issues/3871
 	c_name := 0
 	params := make(map[string]interface{})
 	params["name"+strconv.Itoa(c_name)] = ids
@@ -148,6 +155,28 @@ func getElements(or []or_arr, ids []int, page int) []iblock_elements {
 			c1++
 		}
 	}
+
+	if len(range_arr) > 0 {
+		for _, item := range range_arr {
+
+			filterStr += " and exists (select * from `iblock_prop_values` where `iblock_elements`.`id` = `iblock_prop_values`.`el_id` and `prop_id` = @name" + strconv.Itoa(c_name) + " and ("
+			params["name"+strconv.Itoa(c_name)] = item.prop_id
+			c_name++
+			c2 = 0
+
+			filterStr += "`value_number` >= @name" + strconv.Itoa(c_name) + " and"
+			params["name"+strconv.Itoa(c_name)] = item.value_from
+
+			c_name++
+			filterStr += " `value_number` <= @name" + strconv.Itoa(c_name) + " "
+			params["name"+strconv.Itoa(c_name)] = item.value_to
+			c_name++
+
+			filterStr += "))"
+			c1++
+		}
+	}
+
 	filterStr += " LIMIT 5 OFFSET " + "@name" + strconv.Itoa(c_name)
 	params["name"+strconv.Itoa(c_name)] = strconv.Itoa((page - 1) * 5)
 
@@ -159,9 +188,6 @@ func getElements(or []or_arr, ids []int, page int) []iblock_elements {
 		hack = append(hack, item.Id)
 	}
 	db.Preload("Iblock_prop_value").Where("id", hack).Find(&res)
-	//select * from `iblock_elements` where `iblock_id` in (?) and `name` != ? and
-	// exists (select * from `iblock_prop_values` where `iblock_elements`.`id` = `iblock_prop_values`.`el_id` and `prop_id` = ? and (`value` = ? or `value` = ?)) and
-	// exists (select * from `iblock_prop_values` where `iblock_elements`.`id` = `iblock_prop_values`.`el_id` and `prop_id` = ? and (`value` = ?)) limit 5 offset
 	return res
 }
 
@@ -214,7 +240,8 @@ func main() {
 		q := createTree(id)
 		catalog := q.catalog
 		var or = []or_arr{{value: []string{"геймерская", "обычная"}, prop_id: 2}, {value: []string{"внутренняя"}, prop_id: 3}}
-		els := getElements(or, q.ids, page)
+		var range_arr = []range_arr{{value_to: 900, value_from: 0, prop_id: 15}}
+		els := getElements(range_arr, or, q.ids, page)
 		props := getProperties(id)
 		return c.JSON(&fiber.Map{
 			"catalog": catalog,
