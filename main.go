@@ -113,11 +113,56 @@ func createTree(id int) createTreeRes {
 		ids:     ids,
 	}
 }
-func getElements(ids []int, page int) []iblock_elements {
+
+type or_arr struct {
+	value   []string
+	prop_id int
+}
+
+func getElements(or []or_arr, ids []int, page int) []iblock_elements {
 	db := __db.init()
+	c_name := 0
+	params := make(map[string]interface{})
+	params["name"+strconv.Itoa(c_name)] = ids
+	filterStr := "select * from `iblock_elements` where `iblock_id` in @name" + strconv.Itoa(c_name) + " and `name` != 'op'"
+	c_name++
+	c1 := 0
+	c2 := 0
+	if len(or) > 0 {
+		for _, item := range or {
+
+			filterStr += " and exists (select * from `iblock_prop_values` where `iblock_elements`.`id` = `iblock_prop_values`.`el_id` and `prop_id` = @name" + strconv.Itoa(c_name) + " and ("
+			params["name"+strconv.Itoa(c_name)] = item.prop_id
+			c_name++
+			c2 = 0
+			for _, val := range item.value {
+				if c2 != 0 {
+					filterStr += " or "
+				}
+				filterStr += "`value` = " + "@name" + strconv.Itoa(c_name)
+				params["name"+strconv.Itoa(c_name)] = val
+				c_name++
+				c2++
+			}
+			filterStr += "))"
+			c1++
+		}
+	}
+	filterStr += " LIMIT 5 OFFSET " + "@name" + strconv.Itoa(c_name)
+	params["name"+strconv.Itoa(c_name)] = strconv.Itoa((page - 1) * 5)
+
 	var elements []iblock_elements
-	db.Offset(page*5).Limit(5).Preload("Iblock_prop_value").Where("iblock_id", ids).Find(&elements)
-	return elements
+	var res []iblock_elements
+	var hack []int
+	db.Raw(filterStr, params).Scan(&elements)
+	for _, item := range elements {
+		hack = append(hack, item.Id)
+	}
+	db.Preload("Iblock_prop_value").Where("id", hack).Find(&res)
+	//select * from `iblock_elements` where `iblock_id` in (?) and `name` != ? and
+	// exists (select * from `iblock_prop_values` where `iblock_elements`.`id` = `iblock_prop_values`.`el_id` and `prop_id` = ? and (`value` = ? or `value` = ?)) and
+	// exists (select * from `iblock_prop_values` where `iblock_elements`.`id` = `iblock_prop_values`.`el_id` and `prop_id` = ? and (`value` = ?)) limit 5 offset
+	return res
 }
 
 func getProperties(id int) map[int][]iblock_prop_value {
@@ -168,7 +213,8 @@ func main() {
 		page, _ := strconv.Atoi(c.Params("page"))
 		q := createTree(id)
 		catalog := q.catalog
-		els := getElements(q.ids, page)
+		var or = []or_arr{{value: []string{"геймерская", "обычная"}, prop_id: 2}, {value: []string{"внутренняя"}, prop_id: 3}}
+		els := getElements(or, q.ids, page)
 		props := getProperties(id)
 		return c.JSON(&fiber.Map{
 			"catalog": catalog,
