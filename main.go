@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/compress"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -90,7 +91,14 @@ type createTreeRes struct {
 	ids     []int
 }
 
+var tree_cache = make(map[int]createTreeRes)
+
 func createTree(id int) createTreeRes {
+	_, cahce := tree_cache[id]
+	if cahce {
+		return tree_cache[id]
+	}
+
 	db := __db.init()
 	var ids []int
 	var deep func(node *catalog_node)
@@ -110,10 +118,11 @@ func createTree(id int) createTreeRes {
 	c := catalog_node{Childrens: nil, Value: _iblock[0]}
 	ids = append(ids, c.Value.Id)
 	deep(&c)
-	return createTreeRes{
+	tree_cache[id] = createTreeRes{
 		catalog: c,
 		ids:     ids,
 	}
+	return tree_cache[id]
 }
 
 type or_arr struct {
@@ -259,6 +268,9 @@ func main() {
 			"props":   props,
 		})
 	})
+	app.Use(compress.New(compress.Config{
+		Level: compress.LevelBestCompression,
+	}))
 
 	log.Fatal(app.Listen(":3000"))
 
