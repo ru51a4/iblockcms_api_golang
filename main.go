@@ -209,6 +209,8 @@ func getProperties(id int) map[int][]iblock_prop_value {
 	if properties_cache[id] != nil {
 		return properties_cache[id]
 	}
+	var rwm sync.RWMutex
+
 	res := make(map[int][]iblock_prop_value)
 	var props []iblock_property
 	var deep func(id int)
@@ -217,7 +219,9 @@ func getProperties(id int) map[int][]iblock_prop_value {
 		db.Preload("Iblock_property").Where("id = ?", id).Find(&_iblock)
 		for _, item := range _iblock {
 			for _, p := range item.Iblock_property {
+				rwm.Lock()
 				props = append(props, p)
+				rwm.Unlock()
 			}
 		}
 		for _, item := range _iblock {
